@@ -1,4 +1,4 @@
-## CCE Intern | Prof. Sriniwas Arigapudi, IIT Kanpur
+## SURGE Intern | Prof. Srinivas Arigapudi, IIT Kanpur
 
 **May'24 - July'24**
 
