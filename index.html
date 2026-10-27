@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Do Q-learning agents learn to collude? An interactive explainer</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7; --surface: #fcfcfb;
+    --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+    --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,.10);
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --other: #b4b2aa;
+    --on-fill: #ffffff; --on-s4: #0b0b0b;
+    --good: #006300; --accent-soft: #e9f1fb;
+    --seq0:#cde2fb; --seq1:#9ec5f4; --seq2:#6da7ec; --seq3:#3987e5; --seq4:#256abf; --seq5:#184f95; --seq6:#0d366b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page: #0d0d0d; --surface: #1a1a19;
+      --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+      --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,.10);
+      --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --other: #5b5a55;
+      --good: #0ca30c; --accent-soft: #1d2a3a;
+      --seq0:#0d366b; --seq1:#184f95; --seq2:#256abf; --seq3:#3987e5; --seq4:#6da7ec; --seq5:#9ec5f4; --seq6:#cde2fb;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19;
+    --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,.10);
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --other: #5b5a55;
+    --good: #0ca30c; --accent-soft: #1d2a3a;
+    --seq0:#0d366b; --seq1:#184f95; --seq2:#256abf; --seq3:#3987e5; --seq4:#6da7ec; --seq5:#9ec5f4; --seq6:#cde2fb;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink);
+         font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 24px 20px 80px; }
+  h1 { font-size: 30px; line-height: 1.2; margin: 0 0 8px; }
+  h2 { font-size: 21px; margin: 0 0 4px; }
+  h3 { font-size: 16px; margin: 18px 0 6px; }
+  p { margin: 8px 0; }
+  .lede { color: var(--ink-2); font-size: 17px; max-width: 760px; }
+  .muted { color: var(--ink-2); }
+  .small { font-size: 13.5px; }
+  code { font: 13.5px ui-monospace, Menlo, monospace; background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; }
+  .kicker { color: var(--muted); font-size: 13px; letter-spacing: .04em; text-transform: uppercase; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px 22px; margin: 18px 0; }
+  .step { display: inline-flex; width: 26px; height: 26px; border-radius: 50%; background: var(--s1); color: #fff;
+          align-items: center; justify-content: center; font-size: 14px; font-weight: 600; margin-right: 8px; vertical-align: 2px; }
+  .howto { background: var(--accent-soft); border-radius: 8px; padding: 10px 14px; font-size: 14.5px; margin: 10px 0 14px; }
+  .howto b { font-weight: 600; }
+  .takeaway { border-left: 3px solid var(--s1); padding: 6px 0 6px 14px; margin: 14px 0 4px; font-size: 15.5px; }
+
+  /* controls */
+  .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px 22px; align-items: end; }
+  .controls label { display: block; font-size: 13px; color: var(--ink-2); margin-bottom: 4px; }
+  .controls .val { float: right; color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+  select, input[type=number], button { font: inherit; font-size: 14.5px; color: var(--ink); background: var(--surface);
+          border: 1px solid var(--axis); border-radius: 8px; padding: 7px 10px; }
+  select, input[type=number] { width: 100%; }
+  input[type=range] { width: 100%; accent-color: var(--s1); }
+  button { cursor: pointer; }
+  button:hover { background: var(--accent-soft); }
+  button.primary { background: var(--s1); color: #fff; border-color: transparent; font-weight: 600; }
+  button.primary:hover { filter: brightness(1.08); background: var(--s1); }
+  button:focus-visible, select:focus-visible, input:focus-visible, svg:focus-visible { outline: 2px solid var(--s1); outline-offset: 2px; }
+  .presets { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; align-items: center; }
+  .presets .lbl { font-size: 13px; color: var(--ink-2); margin-right: 4px; }
+  .chip { border-radius: 999px; padding: 5px 12px; font-size: 13.5px; }
+  details.adv { margin-top: 12px; font-size: 14px; }
+  details summary { cursor: pointer; color: var(--ink-2); }
+  .adv .controls { margin-top: 10px; }
+
+  /* payoff matrix */
+  .two { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(280px, 1.2fr); gap: 22px; align-items: start; }
+  @media (max-width: 760px) { .two { grid-template-columns: 1fr; } }
+  table.matrix { border-collapse: separate; border-spacing: 4px; width: 100%; text-align: center; font-variant-numeric: tabular-nums; }
+  table.matrix th { font-weight: 500; font-size: 13px; color: var(--ink-2); padding: 2px 4px; }
+  table.matrix td { background: var(--page); border-radius: 8px; padding: 12px 6px; position: relative; font-size: 15px; border: 2px solid transparent; }
+  table.matrix td.ne { border-color: var(--s3); }
+  table.matrix td .tag { display: block; font-size: 11px; color: var(--good); font-weight: 600; margin-top: 2px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 10px 0 0; font-size: 13.5px; color: var(--ink-2); }
+  .legend .k { display: inline-block; width: 18px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+  .legend .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 6px; }
+
+  /* tiles */
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 12px 0; }
+  .tile { background: var(--page); border-radius: 10px; padding: 12px 14px; }
+  .tile .v { font-size: 28px; font-weight: 650; line-height: 1.15; }
+  .tile .l { font-size: 12.5px; color: var(--ink-2); }
+
+  /* stacked bar */
+  .stack { display: flex; gap: 2px; height: 38px; margin: 12px 0 6px; }
+  .stack .seg { border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600;
+                color: var(--on-fill); min-width: 2px; overflow: hidden; white-space: nowrap; cursor: default; }
+  .stack .seg:hover, .stack .seg:focus-visible { filter: brightness(1.12); outline: 2px solid var(--ink); outline-offset: 1px; }
+  .stack .seg.c4 { color: var(--on-s4); }
+  .c1 { background: var(--s1); } .c2 { background: var(--s2); } .c3 { background: var(--s3); } .c4 { background: var(--s4); } .c0 { background: var(--other); }
+  table.tbl { border-collapse: collapse; width: 100%; font-size: 14px; font-variant-numeric: tabular-nums; }
+  table.tbl th, table.tbl td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--grid); }
+  table.tbl th { font-weight: 500; color: var(--ink-2); font-size: 13px; }
+  tr.on-path td { background: var(--accent-soft); }
+
+  /* deviation pills */
+  .path { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; margin: 12px 0; }
+  .pill { background: var(--page); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; text-align: center; min-width: 64px; }
+  .pill b { display: block; font-size: 18px; letter-spacing: .02em; }
+  .pill span { font-size: 11.5px; color: var(--ink-2); }
+  .pill.forced { border: 2px solid var(--s2); }
+  .pill.cyc { border: 2px solid var(--s1); }
+  .arrow { align-self: center; color: var(--muted); }
+
+  /* charts */
+  .chart { position: relative; }
+  svg { display: block; width: 100%; height: auto; }
+  svg text { font: 12px system-ui, -apple-system, "Segoe UI", sans-serif; fill: var(--muted); }
+  svg text.lbl { fill: var(--ink-2); font-size: 12.5px; }
+  .gridline { stroke: var(--grid); stroke-width: 1; }
+  .axisline { stroke: var(--axis); stroke-width: 1; }
+  .line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  .st1 { stroke: var(--s1); } .st2 { stroke: var(--s2); } .st3 { stroke: var(--s3); } .stm { stroke: var(--muted); }
+  .cross { stroke: var(--axis); stroke-width: 1; }
+  .dot { stroke: var(--surface); stroke-width: 2; }
+  .hm-cell { stroke: var(--surface); stroke-width: 2; rx: 4; }
+  .hm-cell:hover, .hm-cell:focus-visible { stroke: var(--ink); outline: none; }
+  #tip { position: fixed; pointer-events: none; z-index: 20; background: var(--surface); color: var(--ink);
+         border: 1px solid var(--axis); border-radius: 8px; padding: 8px 10px; font-size: 13px; box-shadow: 0 4px 14px rgba(0,0,0,.18);
+         max-width: 260px; display: none; }
+  #tip .t { color: var(--ink-2); margin-bottom: 4px; }
+  #tip .r { display: flex; align-items: center; gap: 8px; }
+  #tip .r i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; }
+  #tip .r b { font-weight: 650; }
+  #tip .r span { color: var(--ink-2); }
+
+  .gloss dt { font-weight: 600; margin-top: 12px; }
+  .gloss dd { margin: 2px 0 0 0; color: var(--ink-2); }
+  .formula { background: var(--page); border-radius: 8px; padding: 12px 14px; font: 14px ui-monospace, Menlo, monospace; overflow-x: auto; margin: 10px 0; }
+  .warn { border-left: 3px solid var(--s4); padding: 4px 0 4px 14px; }
+  .sweep-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 8px 0 12px; }
+  .sweep-actions select { width: auto; }
+  progress { width: 160px; height: 8px; accent-color: var(--s1); }
+  footer { color: var(--muted); font-size: 13px; margin-top: 30px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <div class="kicker">SURGE '24 · IIT Kanpur · Q-learning in games</div>
+    <button id="theme" type="button" aria-label="Toggle light/dark theme">Toggle theme</button>
+  </div>
+
+  <h1>Do Q-learning agents learn to collude?</h1>
+  <p class="lede">Two independent learning algorithms play the same game over and over, with no communication.
+    Do they find the equilibrium, a price war, or quiet cooperation? Everything on this page runs live in your browser:
+    pick a game, change a parameter and watch what the agents learn.</p>
+
+  <div class="card">
+    <h2>The big idea, in 30 seconds</h2>
+    <p>Imagine two online shops whose pricing bots keep adjusting prices to earn more. Each bot only sees the
+      <b>last round</b> (what both shops did) and the <b>profit it just got</b>. It slowly learns "in situation <i>S</i>,
+      action <i>A</i> tends to pay <i>X</i>". That is <b>Q-learning</b>.</p>
+    <p>Each game below is a tiny stand-in for a pricing decision: <b>Cooperate</b> = keep the price high,
+      <b>Defect</b> = undercut. The question is whether the two learners settle on a
+      <b>Nash equilibrium</b> (nobody gains by switching alone), or on something else, such as
+      <b>tacit collusion</b>, where they keep prices high without ever agreeing to.</p>
+    <p class="small muted">The key lever is the <b>discount factor γ</b>: how much a learner cares about future profit.
+      If γ = 0 it is purely short-sighted. If γ is large it can learn that undercutting today triggers a price war tomorrow.</p>
+  </div>
+
+  <!-- 1 CONTROLS -->
+  <div class="card" id="controls">
+    <h2><span class="step">1</span>Choose a game and its parameters</h2>
+    <p class="muted small">Everything below updates automatically when you change anything here.</p>
+    <div class="controls" id="ctrlRow">
+      <div><label for="gameSel">Game</label><select id="gameSel"></select></div>
+      <span id="paramBox" style="display:contents"></span>
+      <div><label for="gamma">Discount factor γ <span class="val" id="gammaV"></span></label>
+        <input type="range" id="gamma" min="0" max="0.99" step="0.01"></div>
+      <div><label for="seeds">Runs (random seeds)</label><input type="number" id="seeds" min="5" max="200" step="5"></div>
+    </div>
+    <details class="adv"><summary>Advanced learning settings</summary>
+      <div class="controls">
+        <div><label for="alpha">Learning rate α <span class="val" id="alphaV"></span></label>
+          <input type="range" id="alpha" min="0.02" max="0.5" step="0.01"></div>
+        <div><label for="steps">Max periods per run</label><input type="number" id="steps" min="5000" max="200000" step="5000"></div>
+        <div><label for="decay">Exploration decay <span class="val" id="decayV"></span></label>
+          <input type="range" id="decay" min="0.00005" max="0.001" step="0.00005"></div>
+      </div>
+    </details>
+    <div class="presets" id="presets"><span class="lbl">Try an experiment:</span></div>
+    <div class="howto" id="presetNote" style="display:none"></div>
+  </div>
+
+  <!-- 2 GAME -->
+  <div class="card">
+    <h2><span class="step">2</span>The game being played</h2>
+    <div class="two">
+      <div>
+        <div id="matrix"></div>
+        <p class="small muted" style="margin-top:8px">Each cell shows <b>(Player 1 payoff, Player 2 payoff)</b>.
+          Green-outlined cells are <b>pure Nash equilibria</b>: neither player can do better by changing only their own action.</p>
+      </div>
+      <div id="gameText"></div>
+    </div>
+  </div>
+
+  <!-- 3 ONE RUN -->
+  <div class="card">
+    <h2><span class="step">3</span>Watch two learners in one run</h2>
+    <div class="howto"><b>How to read this:</b> the lines show how often each player chose the first action
+      (<span id="firstAct"></span>) in the last 300 periods. At the start both explore at random (about 50%), so lines sit near the middle.
+      As exploration (the grey line) fades, the players commit. A line at <b>100%</b> means always that action, <b>0%</b> never.
+      Hover or use ←/→ keys to read exact values.</div>
+    <div class="legend" id="runLegend"></div>
+    <div class="chart" id="runChart"></div>
+    <div class="controls" style="margin-top:10px; max-width:420px">
+      <div><label for="seed">Seed for this run</label><input type="number" id="seed" min="0" step="1"></div>
+      <div><button id="newSeed" type="button">Run again with a new seed</button></div>
+    </div>
+    <div id="runText" class="takeaway"></div>
+
+    <h3>What did they learn? (the greedy policy)</h3>
+    <p class="small muted">Each learner's strategy is a lookup table: "given what happened last round, what do I play now?"
+      Highlighted rows are the situations that actually occur once play has settled.</p>
+    <div id="policy"></div>
+    <details style="margin-top:10px"><summary class="small">Table view of the chart data</summary><div id="runTable"></div></details>
+  </div>
+
+  <!-- 4 MANY RUNS -->
+  <div class="card">
+    <h2><span class="step">4</span>What do they usually end up doing? (many runs)</h2>
+    <div class="howto"><b>How to read this:</b> learning is random, so one run can mislead. This repeats the experiment with many seeds
+      and shows how often each <b>final outcome</b> occurs. A label like <code>CC</code> means both players end up playing C every period;
+      <code>CC&gt;DD</code> means a repeating cycle (CC, then DD, then CC …).</div>
+    <div class="tiles" id="tiles"></div>
+    <div id="stack"></div>
+    <div id="outTable"></div>
+    <div id="manyText" class="takeaway"></div>
+  </div>
+
+  <!-- 5 DEVIATION -->
+  <div class="card">
+    <h2><span class="step">5</span>Is it real collusion? The deviation test</h2>
+    <div class="howto"><b>How to read this:</b> take the run from section 3, wait until it has settled, then <b>force Player 1 to cheat once</b>
+      (take its most profitable one-shot deviation). Then let both players follow the strategy they learned.
+      If Player 2 <b>retaliates</b> and cooperation later <b>resumes</b>, the high outcome is held up by a threat of punishment,
+      the signature of genuine algorithmic collusion rather than a lucky coincidence.</div>
+    <div id="dev"></div>
+  </div>
+
+  <!-- 6 SWEEP -->
+  <div class="card">
+    <h2><span class="step">6</span>Sweep the parameters</h2>
+    <div class="howto"><b>How to read this:</b> repeats the many-run experiment across a range of payoff values. Darker = more of the runs end that way.
+      This is how you see <b>where the behaviour flips</b> (for example, the stag hunt flips at G = 1).</div>
+    <div class="sweep-actions">
+      <button class="primary" id="sweepBtn" type="button">Run sweep with current settings</button>
+      <label class="small muted">Show: <select id="metric"><option value="focal">Share ending at the focal outcome</option><option value="nash">Share ending at a Nash equilibrium</option></select></label>
+      <label class="small muted"><input type="checkbox" id="sweepTbl"> table view</label>
+      <progress id="prog" value="0" max="1" style="display:none"></progress>
+      <span class="small muted" id="sweepStatus"></span>
+    </div>
+    <div class="chart" id="sweepChart"></div>
+    <div id="sweepTable"></div>
+    <div id="sweepText" class="takeaway" style="display:none"></div>
+  </div>
+
+  <!-- 7 LEARN -->
+  <div class="card">
+    <h2><span class="step">7</span>How it works (and what to be careful about)</h2>
+    <h3>The learning rule</h3>
+    <p>Each player keeps a table <code>Q[state][action]</code>: its current estimate of how good an action is in a state.
+      After every period it nudges one entry toward what it just observed:</p>
+    <div class="formula">Q[s][a] ← Q[s][a] + α · ( r + γ · max<sub>a'</sub> Q[s'][a'] − Q[s][a] )</div>
+    <p class="small muted"><b>s</b> = last round's pair of actions, <b>a</b> = what I played, <b>r</b> = profit received,
+      <b>s'</b> = the new state, <b>α</b> = learning rate, <b>γ</b> = discount factor.</p>
+    <p>To keep learning, a player sometimes plays a random action (<b>ε-greedy</b>). Exploration starts at 100% and decays
+      exponentially, <code>ε<sub>t</sub> = e<sup>−decay·t</sup></code>. A run stops early once exploration is low and both strategies have stopped changing.</p>
+
+    <dl class="gloss">
+      <dt>Nash equilibrium</dt><dd>A pair of actions where neither player gains by switching on their own.</dd>
+      <dt>Tacit collusion</dt><dd>Keeping outcomes better for both than the equilibrium, with no communication, only because each side expects the other to punish cheating.</dd>
+      <dt>Payoff-dominant vs risk-dominant</dt><dd>In the stag hunt, (C, C) pays most but (D, D) is safer. D is the risk-dominant choice when G &lt; 1 (the point where C's chance of a 1+G payoff no longer beats the safe 1 at 50/50 odds).</dd>
+      <dt>Self-confirming outcome</dt><dd>Once exploration fades, an off-path action is rarely tried again, so a wrong, pessimistic estimate of it is never corrected. That is why some runs end at outcomes that are <i>not</i> Nash (for example Hawk-Dove with a small G).</dd>
+    </dl>
+
+    <h3 class="warn" style="margin-top:20px">Honest limitations</h3>
+    <ul class="small">
+      <li>These are toy 2-player games with a 1-round memory, not a real pricing market. Real-world claims need richer models (e.g. Bertrand competition with many prices).</li>
+      <li>Q-learning's convergence guarantees assume a fixed environment. Here the opponent is learning too, so results are empirical and seed-dependent. That is why we run many seeds.</li>
+      <li>Results depend on settings such as α, how fast exploration decays and the initial Q-values.</li>
+      <li>This browser engine is a JavaScript port of <code>qlearning_games.py</code> (same algorithm, different random numbers), so exact percentages differ slightly from the Python output.</li>
+    </ul>
+  </div>
+
+  <footer>Aayush Singh · SURGE 2024 · mentor Prof. Srinivas Arigapudi, Department of Economic Sciences, IIT Kanpur. Code: <code>qlearning_games.py</code>, <code>qlearning.js</code>, <code>app.js</code>.</footer>
+</div>
+<div id="tip" role="tooltip"></div>
+<script src="qlearning.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
