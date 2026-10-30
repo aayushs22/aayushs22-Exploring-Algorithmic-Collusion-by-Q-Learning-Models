@@ -62,7 +62,7 @@
     { label: "Price war (γ = 0)", key: "pd", params: { G: 1, L: 1 }, gamma: 0,
       note: "<b>What to notice:</b> short-sighted learners (γ = 0) end at <code>DD</code> in essentially every run. Defecting is dominant, so there is no reason to cooperate. This is the textbook Nash prediction." },
     { label: "Patient learners (γ = 0.9)", key: "pd", params: { G: 1, L: 1 }, gamma: 0.9,
-      note: "<b>What to notice:</b> once the future matters, some runs end at <code>CC</code>, which is <i>not</i> a one-shot equilibrium. Scroll to section 5 to see whether a cheater gets punished: that is what makes it collusion." },
+      note: "<b>What to notice:</b> once the future matters, some runs end at <code>CC</code>, which is <i>not</i> a one-shot equilibrium. Section 5 checks whether a cheater gets punished, and section 6 measures how often that happens." },
     { label: "Stag hunt, G = 0.5", key: "stag_hunt", params: { G: 0.5 }, gamma: 0,
       note: "<b>What to notice:</b> with G &lt; 1 the safe action D is risk-dominant, and the learners settle on <code>DD</code>." },
     { label: "Stag hunt, G = 1.5", key: "stag_hunt", params: { G: 1.5 }, gamma: 0,
@@ -118,6 +118,11 @@
       s("text", { x: X(cfg.vline) - 6, y: m.t + ih * 0.62, "text-anchor": "end" }, svg, cfg.vlineLabel);
     }
     cfg.series.forEach((se) => {
+      if (se.band) {
+        const up = se.band.hi.map((v, i) => (i ? "L" : "M") + X(xs[i]).toFixed(1) + " " + Y(v).toFixed(1)).join(" ");
+        const dn = se.band.lo.map((_, k) => { const i = n - 1 - k; return "L" + X(xs[i]).toFixed(1) + " " + Y(se.band.lo[i]).toFixed(1); }).join(" ");
+        s("path", { d: up + " " + dn + " Z", fill: se.fill, "fill-opacity": "0.16", stroke: "none" }, svg);
+      }
       const d = se.values.map((v, i) => (i ? "L" : "M") + X(xs[i]).toFixed(1) + " " + Y(v).toFixed(1)).join(" ");
       s("path", { d, class: "line " + se.cls }, svg);
       if (cfg.markers) se.values.forEach((v, i) => s("circle", { cx: X(xs[i]), cy: Y(v), r: 4, fill: se.fill, class: "dot" }, svg));
@@ -264,6 +269,10 @@
     T(pct(sum.nash), "end at a pure Nash equilibrium");
     T(`${num(sum.payoff[0])} / ${num(sum.payoff[1])}`, "avg payoff per period (P1 / P2)");
     T(pct(sum.converged), `of ${sum.N} runs fully converged`);
+    if (game.key === "pd") {
+      const md = runs.reduce((a, r) => a + QL.collusionIndex(game, r), 0) / runs.length;
+      T(num(md), "mean collusion index Δ (0 = Nash, 1 = full cooperation)");
+    }
 
     // stacked bar: coloured single-state outcomes + one grey "cycles/other" segment
     const host = $("#stack");
@@ -382,6 +391,123 @@
     }
   }
 
+  // ---------------------------------------------------------------- collusion analysis
+  const GAMMAS = [0, 0.5, 0.8, 0.9, 0.95];
+  let collRes = null;
+
+  function updateCollVisibility() {
+    const ok = state.key === "pd";
+    $("#collNA").style.display = ok ? "none" : "block";
+    $("#collBody").style.display = ok ? "block" : "none";
+  }
+
+  async function runCollusion() {
+    const N = Math.max(20, Math.min(500, parseInt($("#collRuns").value, 10) || 100));
+    const thr = parseFloat($("#collThr").value) || 0.5;
+    const game = QL.makeGame("pd", state.params);
+    const gammas = GAMMAS.slice();
+    if (state.gamma > 0 && gammas.indexOf(state.gamma) < 0) gammas.push(state.gamma);
+    gammas.sort((a, b) => a - b);
+    const prog = $("#collProg");
+    prog.style.display = "inline-block"; prog.max = gammas.length * N; prog.value = 0;
+    $("#collBtn").disabled = true;
+    const rows = [];
+    let done = 0;
+    for (const g of gammas) {
+      const res = [];
+      for (let i = 0; i < N; i++) {
+        const o = Object.assign({}, opts(), { gamma: g });
+        res.push(QL.classify(game, QL.simulate(game, o, 3000 + i, false), thr, 8));
+        prog.value = ++done;
+        if (i % 10 === 9) { $("#collStatus").textContent = `γ = ${g}: ${i + 1} / ${N} runs`; await new Promise((r) => setTimeout(r, 0)); }
+      }
+      rows.push({ gamma: g, t: QL.tally(res) });
+    }
+    prog.style.display = "none";
+    $("#collBtn").disabled = false;
+    $("#collStatus").textContent = `Done: ${N} runs per γ, “high” = Δ ≥ ${thr}.`;
+    collRes = { rows, N, thr, G: state.params.G, L: state.params.L, goal: state.gamma };
+    renderCollusion();
+  }
+
+  const CLS = {
+    sustained: { name: "sustained collusion", c: 1 },
+    unpunished: { name: "unpunished high outcome", c: 3 },
+    competitive: { name: "competitive (Nash)", c: 2 },
+    other: { name: "other", c: 0 },
+  };
+  const ci = (t, c) => `${pct(t.rates[c])} (95% CI ${Math.round(t.ci[c][0] * 100)}–${pct(t.ci[c][1])})`;
+
+  function renderCollusion() {
+    if (!collRes) return;
+    const { rows, N } = collRes;
+    $("#collOut").style.display = "block";
+
+    // headline
+    const base = rows.find((r) => r.gamma === 0).t;
+    const focus = rows.find((r) => r.gamma === collRes.goal) || rows[rows.length - 1];
+    const head = $("#collHead");
+    head.style.display = "block";
+    let msg = `With γ = ${focus.gamma}, <b>${ci(focus.t, "sustained")}</b> of ${N} runs sustain collusion, versus <b>${ci(base, "sustained")}</b> at γ = 0.`;
+    if (focus.t.forgiving != null) msg += ` Of the collusive runs, ${pct(focus.t.forgiving)} return to the settled outcome after punishing (forgiving) and ${pct(1 - focus.t.forgiving)} do not (grim-trigger style).`;
+    const first = rows.find((r) => r.t.rates.sustained >= 0.05);
+    msg += first ? ` Collusion first becomes common (≥5% of runs) at γ = ${first.gamma}: the future has to matter before punishment can work.`
+      : " No γ in this range produced collusion at ≥5% of runs. Try a different G or L, or more patient learners.";
+    if (collRes.G - collRes.L >= 1) msg += " <b>Caution:</b> G − L ≥ 1, so taking turns exploiting each other beats mutual cooperation; Δ is hard to interpret for these payoffs.";
+    head.innerHTML = msg;
+
+    // stacked bars by gamma
+    const st = $("#collStack");
+    st.textContent = "";
+    rows.forEach((r) => {
+      const row = h("div", { class: "brow" }, st);
+      h("div", { class: "rl" }, row, `γ = ${r.gamma}`);
+      const bar = h("div", { class: "stack", role: "img", "aria-label": `Outcome classes at gamma ${r.gamma}` }, row);
+      QL.CLASSES.forEach((c) => {
+        const f = r.t.rates[c];
+        if (f <= 0) return;
+        const seg = h("div", { class: `seg c${CLS[c].c}`, tabindex: "0" }, bar, f >= 0.1 ? pct(f) : "");
+        seg.style.flex = String(f);
+        const tipf = (e) => { const b = seg.getBoundingClientRect(); showTip(`γ = ${r.gamma}`, [{ value: pct(f), name: CLS[c].name }], e.clientX || b.left + b.width / 2, e.clientY || b.top); };
+        seg.addEventListener("pointermove", tipf); seg.addEventListener("focus", tipf);
+        seg.addEventListener("pointerleave", hideTip); seg.addEventListener("blur", hideTip);
+      });
+      h("div", { class: "rv" }, row, pct(r.t.rates.sustained));
+    });
+    h("p", { class: "small muted" }, st, "Bold number on the right = share of runs with sustained collusion.");
+
+    // curve
+    const xs = rows.map((r) => r.gamma);
+    const clip = (v) => Math.max(0, Math.min(1, v));
+    lineChart($("#collCurve"), {
+      xs, markers: true, xTicks: xs, aria: "Sustained collusion rate and mean collusion index against the discount factor",
+      series: [
+        { name: "collusion rate", cls: "st1", color: "var(--s1)", fill: "var(--s1)", values: rows.map((r) => r.t.rates.sustained),
+          band: { lo: rows.map((r) => r.t.ci.sustained[0]), hi: rows.map((r) => r.t.ci.sustained[1]) }, fmt: pct },
+        { name: "mean Δ", cls: "st3", color: "var(--s3)", fill: "var(--s3)", values: rows.map((r) => clip(r.t.meanDelta)), fmt: (v) => num(v) },
+      ],
+      xLabel: "Discount factor γ (how much the future matters)", yLabel: "Share of runs / Δ", fmtX: (v) => String(v), tipTitle: (x) => `γ = ${x}`,
+    });
+
+    // table
+    const tb = $("#collTable");
+    tb.textContent = "";
+    const t = h("table", { class: "tbl" }, tb);
+    const hr = h("tr", {}, t);
+    ["γ", "Sustained collusion", "Unpunished high", "Competitive (Nash)", "Other", "Mean Δ"].forEach((x) => h("th", {}, hr, x));
+    rows.forEach((r) => {
+      const tr = h("tr", {}, t);
+      [String(r.gamma), ci(r.t, "sustained"), ci(r.t, "unpunished"), ci(r.t, "competitive"), pct(r.t.rates.other), num(r.t.meanDelta)].forEach((x) => h("td", {}, tr, x));
+    });
+  }
+
+  function resetCollusion() {
+    collRes = null;
+    $("#collOut").style.display = "none"; $("#collHead").style.display = "none";
+    $("#collStatus").textContent = "Settings changed. Click the button to measure collusion for them.";
+    updateCollVisibility();
+  }
+
   // ---------------------------------------------------------------- sweep
   function opts() { return { alpha: state.alpha, gamma: state.gamma, steps: state.steps, epsDecay: state.decay }; }
 
@@ -486,7 +612,7 @@
   }
 
   let timer = null;
-  function schedule() { clearTimeout(timer); timer = setTimeout(() => { runAll(); resetSweep(); }, 120); }
+  function schedule() { clearTimeout(timer); timer = setTimeout(() => { runAll(); resetSweep(); resetCollusion(); }, 120); }
 
   // ---------------------------------------------------------------- controls
   function buildParams() {
@@ -532,6 +658,7 @@
     $("#seed").addEventListener("input", (e) => { const v = parseInt(e.target.value, 10); if (!Number.isNaN(v)) { state.seed = v; schedule(); } });
     $("#newSeed").addEventListener("click", () => { state.seed = Math.floor(Math.random() * 1000); $("#seed").value = state.seed; runAll(); });
     $("#sweepBtn").addEventListener("click", runSweep);
+    $("#collBtn").addEventListener("click", runCollusion);
     $("#metric").addEventListener("change", renderSweep);
     $("#sweepTbl").addEventListener("change", renderSweep);
     $("#theme").addEventListener("click", () => {
@@ -546,7 +673,7 @@
         state.key = p.key; state.params = Object.assign({}, p.params); state.gamma = p.gamma;
         syncInputs();
         const n = $("#presetNote"); n.innerHTML = p.note; n.style.display = "block";
-        runAll(); resetSweep();
+        runAll(); resetSweep(); resetCollusion();
       });
     });
   }
@@ -556,5 +683,8 @@
   runAll();
   resetSweep();
   $("#sweepStatus").textContent = "Click the button to run a sweep (takes a few seconds).";
-  if (location.hash === "#sweep") runSweep();   // deep link: open the page with the sweep already run
+  resetCollusion();
+  $("#collStatus").textContent = "Compares γ = 0 (no future) with patient learners, using the payoffs above.";
+  if (location.hash === "#sweep") runSweep();
+  if (location.hash === "#collusion") runCollusion();   // deep link: open the page with the sweep already run
 })();

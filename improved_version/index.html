@@ -139,6 +139,15 @@
   #tip .r b { font-weight: 650; }
   #tip .r span { color: var(--ink-2); }
 
+  /* collusion analysis */
+  .brow { display: grid; grid-template-columns: 74px 1fr 64px; gap: 10px; align-items: center; margin: 6px 0; font-size: 13.5px; }
+  .brow .stack { margin: 0; height: 30px; }
+  .brow .rl { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .brow .rv { font-weight: 650; font-variant-numeric: tabular-nums; }
+  table.defs td:first-child { white-space: nowrap; font-weight: 600; }
+  .inline { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 10px 0; }
+  .inline label { font-size: 13px; color: var(--ink-2); display: block; margin-bottom: 4px; }
+  .inline input { width: 110px; }
   .gloss dt { font-weight: 600; margin-top: 12px; }
   .gloss dd { margin: 2px 0 0 0; color: var(--ink-2); }
   .formula { background: var(--page); border-radius: 8px; padding: 12px 14px; font: 14px ui-monospace, Menlo, monospace; overflow-x: auto; margin: 10px 0; }
@@ -256,9 +265,48 @@
     <div id="dev"></div>
   </div>
 
-  <!-- 6 SWEEP -->
+  <!-- 6 COLLUSION -->
+  <div class="card" id="collCard">
+    <h2><span class="step">6</span>Measuring collusion</h2>
+    <div class="howto" id="collNA" style="display:none"><b>Not applicable for this game.</b> The collusion measures compare the outcome with the one-shot
+      Nash outcome, which only makes sense in the <b>Prisoner's Dilemma</b>, where the cooperative outcome (C, C) is <i>not</i> itself an equilibrium.
+      In the Stag Hunt and Coordination games, (C, C) <i>is</i> an equilibrium, so landing there is coordination, not collusion. Switch the game to Prisoner's Dilemma to use this section.</div>
+    <div id="collBody">
+      <div class="howto"><b>How to read this:</b> "different from Nash" is not enough on its own. Each run is measured with the
+        <b>collusion index Δ = (average payoff − Nash payoff) / (cooperative payoff − Nash payoff)</b>
+        (0 = competitive, 1 = full cooperation) and then classified by also checking whether cheating is punished:</div>
+      <table class="tbl defs" style="margin-bottom:12px">
+        <tr><th>Class</th><th>Meaning</th></tr>
+        <tr><td><span class="sw c1" style="display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px"></span>Sustained collusion</td><td>Converged, Δ at or above the threshold, <b>not</b> a one-shot Nash outcome, and a forced one-time cheat <b>is punished</b> (play leaves the outcome afterwards).</td></tr>
+        <tr><td><span class="sw c3" style="display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px"></span>Unpunished high outcome</td><td>Same, but cheating is <b>not</b> punished. The outcome is high but not backed by a threat.</td></tr>
+        <tr><td><span class="sw c2" style="display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px"></span>Competitive</td><td>The learners end at the one-shot Nash outcome (D, D).</td></tr>
+        <tr><td><span class="sw c0" style="display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px"></span>Other</td><td>Low-Δ cycles, or runs that never settled.</td></tr>
+      </table>
+      <div class="inline">
+        <div><label for="collRuns">Runs per γ</label><input type="number" id="collRuns" min="20" max="500" step="20" value="100"></div>
+        <div><label for="collThr">“High” means Δ ≥</label><input type="number" id="collThr" min="0.1" max="1" step="0.1" value="0.5"></div>
+        <button class="primary" id="collBtn" type="button">Run collusion analysis</button>
+        <progress id="collProg" value="0" max="1" style="display:none"></progress>
+        <span class="small muted" id="collStatus">Compares γ = 0 (no future) with patient learners, using the payoffs above.</span>
+      </div>
+      <div id="collHead" class="takeaway" style="display:none"></div>
+      <div id="collOut" style="display:none">
+        <h3>What the learners end up doing, by discount factor</h3>
+        <div class="legend" style="margin:0 0 6px"><span><i class="sw c1"></i>Sustained collusion</span><span><i class="sw c3"></i>Unpunished high outcome</span><span><i class="sw c2"></i>Competitive (Nash)</span><span><i class="sw c0"></i>Other</span></div>
+        <div id="collStack"></div>
+        <h3>Collusion as the future starts to matter</h3>
+        <p class="small muted">Blue: share of runs with sustained collusion (shaded band = 95% confidence interval). Green: mean collusion index Δ (clipped to 0–1 for display).
+          Hover or use ←/→ to read exact values.</p>
+        <div class="chart" id="collCurve"></div>
+        <h3>The numbers</h3>
+        <div id="collTable"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7 SWEEP -->
   <div class="card">
-    <h2><span class="step">6</span>Sweep the parameters</h2>
+    <h2><span class="step">7</span>Sweep the parameters</h2>
     <div class="howto"><b>How to read this:</b> repeats the many-run experiment across a range of payoff values. Darker = more of the runs end that way.
       This is how you see <b>where the behaviour flips</b> (for example, the stag hunt flips at G = 1).</div>
     <div class="sweep-actions">
@@ -275,7 +323,7 @@
 
   <!-- 7 LEARN -->
   <div class="card">
-    <h2><span class="step">7</span>How it works (and what to be careful about)</h2>
+    <h2><span class="step">8</span>How it works (and what to be careful about)</h2>
     <h3>The learning rule</h3>
     <p>Each player keeps a table <code>Q[state][action]</code>: its current estimate of how good an action is in a state.
       After every period it nudges one entry toward what it just observed:</p>
@@ -288,6 +336,8 @@
     <dl class="gloss">
       <dt>Nash equilibrium</dt><dd>A pair of actions where neither player gains by switching on their own.</dd>
       <dt>Tacit collusion</dt><dd>Keeping outcomes better for both than the equilibrium, with no communication, only because each side expects the other to punish cheating.</dd>
+      <dt>Collusion index Δ</dt><dd>Δ = (π̄ − π<sub>Nash</sub>) / (π<sub>coop</sub> − π<sub>Nash</sub>). It is 0 at the competitive (Nash) payoff and 1 at the fully cooperative payoff. In the Prisoner's Dilemma, Δ is simply the average payoff per player. It is high only if the outcome beats Nash; whether it is <i>collusion</i> additionally needs the deviation to be punished.</dd>
+      <dt>Wilson confidence interval</dt><dd>The range of true rates consistent with the observed share of runs. With 100 runs, a 26% rate is roughly 18–35%; with 20 runs the range is about twice as wide.</dd>
       <dt>Payoff-dominant vs risk-dominant</dt><dd>In the stag hunt, (C, C) pays most but (D, D) is safer. D is the risk-dominant choice when G &lt; 1 (the point where C's chance of a 1+G payoff no longer beats the safe 1 at 50/50 odds).</dd>
       <dt>Self-confirming outcome</dt><dd>Once exploration fades, an off-path action is rarely tried again, so a wrong, pessimistic estimate of it is never corrected. That is why some runs end at outcomes that are <i>not</i> Nash (for example Hawk-Dove with a small G).</dd>
     </dl>
@@ -296,12 +346,13 @@
     <ul class="small">
       <li>These are toy 2-player games with a 1-round memory, not a real pricing market. Real-world claims need richer models (e.g. Bertrand competition with many prices).</li>
       <li>Q-learning's convergence guarantees assume a fixed environment. Here the opponent is learning too, so results are empirical and seed-dependent. That is why we run many seeds.</li>
+      <li>The collusion measures are defined for the Prisoner's Dilemma only, and the deviation test is run from one state of the settled outcome. A positive result in one run is not proof; look at rates over many runs.</li>
       <li>Results depend on settings such as α, how fast exploration decays and the initial Q-values.</li>
       <li>This browser engine is a JavaScript port of <code>qlearning_games.py</code> (same algorithm, different random numbers), so exact percentages differ slightly from the Python output.</li>
     </ul>
   </div>
 
-  <footer>Aayush Singh · SURGE 2024 · mentor Prof. Srinivas Arigapudi, Department of Economic Sciences, IIT Kanpur. Code: <code>qlearning_games.py</code>, <code>qlearning.js</code>, <code>app.js</code>.</footer>
+  <footer>Aayush Singh · SURGE 2024 · mentor Prof. Srinivas Arigapudi, Department of Economic Sciences, IIT Kanpur. Code: <code>qlearning_games.py</code>, <code>collusion_report.py</code>, <code>qlearning.js</code>, <code>app.js</code>.</footer>
 </div>
 <div id="tip" role="tooltip"></div>
 <script src="qlearning.js"></script>

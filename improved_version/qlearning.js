@@ -230,7 +230,57 @@
     };
   }
 
-  const QL = { GAMES, makeGame, simulate, runMany, summarise, deviationTest, cycleLabel, DEFAULTS, mulberry32 };
+  // ---- collusion measurement (Prisoner's Dilemma only) ----------------------------
+  // Collusion index  Δ = (π̄ − π_Nash) / (π_coop − π_Nash): 0 = Nash payoff, 1 = full cooperation.
+  // Classes: competitive (one-shot Nash outcome), sustained (Δ >= thr, converged, not Nash and a forced
+  // deviation is punished), unpunished (same but no punishment), other.
+  const CLASSES = ["sustained", "unpunished", "competitive", "other"];
+
+  function pdBench(game) {
+    if (game.key !== "pd") return null;
+    const P = game.P;
+    return { nash: (P[1][1][0] + P[1][1][1]) / 2, coop: (P[0][0][0] + P[0][0][1]) / 2 };
+  }
+  function collusionIndex(game, run) {
+    const b = pdBench(game);
+    return ((run.avg[0] + run.avg[1]) / 2 - b.nash) / (b.coop - b.nash);
+  }
+  function classify(game, run, thr, horizon) {
+    thr = thr == null ? 0.5 : thr;
+    const delta = collusionIndex(game, run);
+    const out = { delta, cls: "other", returns: false };
+    if (run.isNash) out.cls = "competitive";
+    else if (run.converged && delta >= thr) {
+      const d = deviationTest(game, run, horizon || 8);
+      out.cls = d.punished ? "sustained" : "unpunished";
+      out.returns = d.returns;
+    }
+    return out;
+  }
+  function wilson(k, n) {            // 95% Wilson score interval
+    if (n === 0) return [0, 1];
+    const z = 1.96, p = k / n, d = 1 + (z * z) / n;
+    const c = (p + (z * z) / (2 * n)) / d;
+    const hw = (z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n))) / d;
+    return [Math.max(0, c - hw), Math.min(1, c + hw)];
+  }
+  function tally(results) {          // results: array of classify() outputs
+    const N = results.length, counts = {}, rates = {}, ci = {};
+    CLASSES.forEach((c) => {
+      counts[c] = results.filter((r) => r.cls === c).length;
+      rates[c] = counts[c] / N;
+      ci[c] = wilson(counts[c], N);
+    });
+    const sus = results.filter((r) => r.cls === "sustained");
+    return {
+      N, counts, rates, ci,
+      meanDelta: results.reduce((a, r) => a + r.delta, 0) / N,
+      forgiving: sus.length ? sus.filter((r) => r.returns).length / sus.length : null,
+    };
+  }
+
+  const QL = { GAMES, makeGame, simulate, runMany, summarise, deviationTest, cycleLabel, DEFAULTS, mulberry32,
+    CLASSES, pdBench, collusionIndex, classify, wilson, tally };
   if (typeof module !== "undefined" && module.exports) module.exports = QL;
   else root.QL = QL;
 })(typeof window !== "undefined" ? window : globalThis);
